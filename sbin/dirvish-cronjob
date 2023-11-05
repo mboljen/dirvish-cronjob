@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+#
+# daily cron job for the dirvish package
+#
+if [ ! -x /usr/sbin/dirvish-expire  ]; then exit 0; fi
+if [ ! -s /etc/dirvish/master.conf ];  then exit 0; fi
+
+
+#
+usage() {
+cat << EOF
+
+Usage: dirvish-cronjob
+
+EOF
+}
+
+
+# Check for root privileges
+if [ "$(id -u)" -ne 0 ]
+then
+    echo "This script needs to be run with root privileges" 1>&2
+    exit 1
+fi
+
+
+# Ensure only one instance is running at a time
+#instances=$(pgrep -c -f "$0")
+#if (( $instances > 1 ))
+#then
+#    echo "$(basename $0) is already running (instances: $instances). Stop." 1>&2
+#    exit 1
+#fi
+
+
+# Logfile
+LOGFILE="/var/log/dirvish-cronjob.log"
+
+# Echo line with preceding timestamp
+echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGFILE"; }
+
+
+# Locate mandatory commands
+MOUNTPATH=$(command -v mountpath)
+DIRVISH_TIDY=$(command -v dirvish-tidy)
+DIRVISH_EXPIRE=$(command -v dirvish-expire)
+DIRVISH_RUNALL=$(command -v dirvish-runall)
+
+# Check commands
+if [ ! -x "${MOUNTPATH}" ]
+then
+    echotime "Tool mountpath not found, probably not installed"
+    exit 1
+fi
+
+# Fetch dirvish bank from /etc/dirvish/master.conf
+BANK=$( sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1; print}' )
+
+# Check dirvish bank
+if [ -z "$BANK" ]
+then
+    echotime "Dirvish bank not defined"
+    exit 2
+else
+    echotime "Default dirvish bank is $BANK"
+fi
+
+# Check mount status of backup partition
+"$MOUNTPATH" -c "$BANK" >/dev/null 2>&1
+MOUNTSTAT=$?
+
+# Check mount status
+if [ "$MOUNTSTAT" -eq 0 ]
+then
+
+    # Device already mounted
+    echotime "Dirvish device already mounted"
+
+elif [ "$MOUNTSTAT" -eq 1 ]
+then
+
+    # Device currently not mounted
+    echotime "Dirvish device not mounted"
+
+else
+
+    # Unknown error
+    echotime "Mount status of dirvish device unknown (exitcode: $MOUNTSTAT)"
+    exit 1
+
+fi
+
+
+# Function to mount dirvish bank unless mounted
+mountnow() {
+    mountpath -c "$1" >/dev/null 2>&1
+    local stat=$?
+    if [ "$stat" -ne 0 ]
+    then
+        echotime "Mounting dirvish bank ..."
+        mountpath "$1"
+        MOUNTSTAT=2
+    fi
+}
+
+
+#
+mountnow "$BANK"
+
+
+# Prune failed backup images
+if [ -x "$DIRVISH_TIDY" ]
+then
+
+    echotime "Pruning failed backup images ..."
+    "$DIRVISH_TIDY"
+    RC=$?
+    if [ "$RC" -ne 0 ]
+    then
+        echotime "Failed to run $DIRVISH_TIDY (exitcode: $RC)"
+        exit "$RC"
+    fi
+
+else
+
+    echotime "Pruning failed backup images ... failed, dirvish-tidy not executable"
+
+fi
+
+
+# Remove expired backup images
+if [ -x "$DIRVISH_EXPIRE" ]
+then
+
+    echotime "Removing expired backup images ..."
+    "$DIRVISH_EXPIRE" --quiet
+    RC=$?
+    if [ "$RC" -ne 0 ]
+    then
+        echotime "Failed to run $DIRVISH_EXPIRE (exitcode: $RC)"
+        exit "$RC"
+    fi
+
+else
+
+    echotime "Removing expired backup images ... failed, dirvish-expire not executable"
+
+fi
+
+
+# Runall dirvish vaults
+if [ -x "$DIRVISH_RUNALL" ]
+then
+
+    echotime "Creating new backup images ..."
+    "$DIRVISH_RUNALL" --quiet
+    RC=$?
+    if [ "$RC" -ne 0 ]
+    then
+        echotime "Failed to run $DIRVISH_RUNALL (exitcode: $RC)"
+    fi
+
+else
+
+    echotime "Creating new backup images ... failed, dirvish-runall not executable"
+
+fi
+
+
+# Umount backup partition if unmounted before
+if [ "$MOUNTSTAT" -eq 2 ]
+then
+    echotime "Unmounting dirvish bank ..."
+    "$MOUNTPATH" -u "$BANK" >/dev/null 2>&1
+fi
+
+
+# User message
+echotime "Dirvish cronjob completed."
+
+
+# Return exit code of last dirvish operation
+exit 0

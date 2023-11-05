@@ -1,0 +1,330 @@
+#!/usr/bin/env bash
+#
+# hourly cron job for processing daily dirvish backups for non-permanent hosts
+#
+if [ ! -x /usr/sbin/dirvish-expire ]; then exit 0; fi
+if [ ! -s /etc/dirvish/master.conf ]; then exit 0; fi
+
+
+# Help text
+usage() {
+cat << EOF
+
+Usage: dirvish-volatile [options]
+
+This cron script manages dirvish vaults from non-permanent sources.  It can be invoked via cron or anacron.
+
+Configuration is read from a configuration file.  Each section indicates an individual source.  The source can be of type host or device.  For hosts, several sources (IP addresses) may be specified.  Each source may contain several vaults.  Several values can be separated via colons (:).
+
+The script checks if a dirvish image is required for today.  If an image is already available, the script proceeds to the next vault.
+
+  -c   Configuration file (default: /etc/dirvish/dirvish-volatile.conf)
+  -s   Spooling directory (default: /var/spool/dirvish)
+  -f   Check physically if dirvish image image exists
+  -h   Display help text
+EOF
+}
+
+
+# Check root privileges
+if [ "$(id -u)" -ne 0 ]
+then
+    echo "This script needs to be run with root privileges" 1>&2
+    exit 1
+fi
+
+# Ensure only one instance is running at a time
+instances=$(pgrep -c -f "$0")
+#if (( $instances > 1 ))
+#then
+#    echo "$(basename $0) is already running (instances: $instances). Stop."
+#    exit 1
+#fi
+
+# Resolve folder where script resides
+SCRIPTDIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+# Default configuration file
+RCFILE=$(realpath "$SCRIPTDIR/../etc/dirvish/dirvish-volatile.conf")
+
+# Logfile
+LOGFILE="/var/log/dirvish-volatile.log"
+
+# Spool directory
+SPOOLDIR="/var/spool/dirvish"
+
+# Check flag
+CHECKFLAG=0
+
+
+# Echo line with preceding timestamp
+echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGFILE"; }
+
+
+# Check commands
+[ -x "$(command -v dirvish)" ]    || exit 1
+[ -x "$(command -v confget)" ]    || exit 1
+[ -x "$(command -v mountpoint)" ] || exit 1
+[ -x "$(command -v mountpath)" ]  || exit 1
+[ -x "$(command -v ping)" ]       || exit 1
+
+
+# Process options
+while getopts c:s:fh OPTION
+do
+    case "${OPTION}"
+    in
+        c) RCFILE=${OPTARG}
+           ;;
+        s) SPOOLDIR=${OPTARG}
+           ;;
+        f) CHECKFLAG=1
+           ;;
+        h) usage
+           exit 0
+           ;;
+       \?) usage
+           exit 1
+           ;;
+    esac
+done
+
+
+# Start log
+echo "--" | tee --append "$LOGFILE"
+
+# Fetch bank from /etc/dirvish/master.conf
+BANK=$(sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1;print}')
+
+# Fetch image-default format form /etc/dirvish/master.conf
+FORMAT=$(sed -n 's/^image-default:\(.*\)$/\1/p' /etc/dirvish/master.conf | awk ' {$1=$1;print} ')
+TODAY=$(date "+$FORMAT" || exit 1)
+
+# Echo identified dirvish bank
+echotime "Dirvish bank located at $BANK"
+
+# Check mount status of dirvish bank
+mountpath -c "$BANK" >/dev/null 2>&1
+MOUNTSTAT=$?
+
+# Check mount status
+if [ "$MOUNTSTAT" -eq 0 ]
+then
+
+    # Device already mounted
+    echotime "Dirvish device already mounted"
+
+elif [ "$MOUNTSTAT" -eq 1 ]
+then
+
+    # Device currently not mounted
+    echotime "Dirvish device not mounted"
+
+else
+
+    # Unknown error
+    echotime "Mount status of dirvish device unknown (exitcode: $MOUNTSTAT)"
+    exit 1
+
+fi
+
+# Function to mount dirvish bank unless mounted
+mountnow() {
+    mountpath -c "$1" >/dev/null 2>&1
+    local stat=$?
+    if [ "$stat" -ne 0 ]
+    then
+        echotime "Mounting dirvish bank ..."
+        mountpath "$1"
+        MOUNTSTAT=2
+    fi
+}
+
+# Quit if configuration file not found
+if [ ! -f "$RCFILE" ]
+then
+    echotime "Configuration file not found $RCFILE"
+    exit 1
+fi
+
+# Quit if spooling directory not found
+if [ ! -d "$SPOOLDIR" ]
+then
+    echotime "Spooling directory not found $SPOOLDIR"
+    exit 1
+fi
+
+# User message
+echotime "Reading configuration file: $RCFILE"
+
+# Retrieve all sections from configuration file
+mapfile -t SECTION < <(confget -f "$RCFILE" -q sections)
+
+# Loop over each section
+for i in "${SECTION[@]}"
+do
+
+    # Fetch variable VAULT
+    VAULT=$(confget -n -f "$RCFILE" -s "$i" -L 'VAULT')
+    if [ -z "$VAULT" ]
+    then
+        echotime "Variable VAULT undefined in section $i"
+        exit 1
+    fi
+
+    # Split VAULT string into array
+    IFS="," read -r -a VAULTS <<< "$VAULT"
+
+    # Check if image of today is already available
+    for THIS in "${VAULTS[@]}"
+    do
+
+        # Associate spoolfile
+        SPOOLFILE="$SPOOLDIR/$THIS"
+
+        # Perform checking according to user setting
+        if [ $CHECKFLAG -eq 0 ]
+        then
+
+            # Check if spoolfile for this vault is available
+            if [ -f "$SPOOLFILE" ] && grep -q $TODAY "$SPOOLFILE"
+            then
+
+                # Image is already available and up-to-date
+                echotime "Found timestamp for a valid image $TODAY for vault $THIS"
+                continue
+
+            fi
+
+        else
+
+            # From here we need access to dirvish bank
+            mountnow "$BANK"
+
+            # Set absolute path
+            DIR="$BANK/$THIS/$TODAY"
+
+            # Check for dirvish summary file
+            if [ -f "$DIR/summary" ]
+            then
+
+                # Found, check status
+                if grep -q 'Status: success' "$DIR/summary"
+                then
+
+                    # Status successful
+                    echotime "Found valid image $TODAY for vault $THIS"
+                    continue
+
+                else
+
+                    # Status not successful
+                    echotime "Found incomplete image $TODAY for vault $THIS, skipped"
+                    # rm -rf "${DIR}"
+                    continue
+
+                fi
+            fi
+
+        fi
+
+
+        # Flag to indicate availability of source
+        ACCESS=0
+
+        # Fetch variable SOURCE
+        SOURCE=$(confget -n -f "$RCFILE" -s "$i" -L 'SOURCE')
+        if [ -z "$SOURCE" ]
+        then
+            echotime "Variable SOURCE undefined in section $i"
+            exit 1
+        fi
+
+        # Split SOURCE string into array
+        IFS="," read -r -a SOURCES <<< "$SOURCE"
+
+        # Fetch variable TYPE
+        TYPE=$(confget -n -f "$RCFILE" -s "$i" -L 'TYPE')
+        if [ -z "$TYPE" ]
+        then
+            echotime "Variable TYPE undefined in section $i"
+            exit 1
+        fi
+
+        # Convert TYPE to lowercase
+        TYPE=${TYPE,,}
+
+        # Determine availability status
+        if [[ "$TYPE" =~ ^host$ ]]
+        then
+
+            # Loop over available hosts (IP addresses)
+            for IP in "${SOURCES[@]}"
+            do
+                # Check if host is available
+                ping -c1 "$IP" >/dev/null
+                stat=$?
+                if [ "$stat" -eq 0 ]
+                then
+                    # Set flag to true
+                    ACCESS=1
+                    # Skip remaining hosts (IP addresses)
+                    break
+                fi
+            done
+
+        elif [[ "$TYPE" =~ ^device$ ]]
+        then
+
+            # Check if device is available, i.e. mounted
+            if mountpoint -q "$SOURCE"
+            then
+                ACCESS=1
+            fi
+
+        else
+
+            # Error message
+            echotime "Invalid TYPE in section $i"
+            exit 1
+
+        fi
+
+        # Check if host or device is available
+        if [ $ACCESS -ne 1 ]
+        then
+
+            # Host or device is currently not accessible
+            echotime "Skipping image $TODAY for vault $THIS, $TYPE currently unavailable"
+            continue
+        fi
+
+        # Show message
+        echotime "Creating image $TODAY for vault $THIS ..."
+
+        # Mount dirvish bank unless already mounted
+        mountnow "$BANK"
+
+        # Start dirvish
+        dirvish --vault "$THIS"
+        stat=$?
+        if [ ${stat} -eq 0 ]
+        then
+            echotime "Image $TODAY for vault $THIS successfully created"
+            echo "$TODAY" > "$SPOOLFILE"
+        else
+            echotime "Image $TODAY for vault $THIS potentially failed, dirvish exit status: $?"
+        fi
+
+    done
+done
+
+# Umount dirvish device if mounted before
+if [ "$MOUNTSTAT" -eq 2 ]
+then
+    echotime "Unmounting dirvish bank ..."
+    mountpath -u "$BANK" >/dev/null 2>&1
+fi
+
+# Terminate successfully
+exit 0

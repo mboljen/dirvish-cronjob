@@ -1,0 +1,9 @@
+/var/log/dirvish-cronjob.log /var/log/dirvish-volatile.log
+{
+    daily
+    missingok
+    rotate 7
+    create 0644 root root
+    compress
+    notifempty
+}

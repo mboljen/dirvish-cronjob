@@ -1,0 +1,9 @@
+#/etc/cron.d/dirvish-volatile: crontab fragment for dirvish-volatile
+
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# run every 20 minutes between 9-21 hours every day
+#
+# min   hour   dom   mon   dow   user   command
+*/20    9-21   *     *     *     root   dirvish-volatile >> /var/log/dirvish-volatile.log 2>&1

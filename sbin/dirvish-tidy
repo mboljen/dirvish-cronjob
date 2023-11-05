@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+#
+# dirvish-tidy: Prune partial dirvish images
+#
+# Source: https://www.dirvish.org/DirvishTidyScript
+#
+# Changes:
+#
+#   Jason Cater      08/13/04   Initial page created.
+#   Matt Munnich     02/07/05   Added crude check if dirvish is running.
+#                               Removed restriction to 20... backup images.
+#   Matthias Boljen  08/09/23   Updated history file check.
+#                               Improved check if dirvish is running.
+#                               Improved command line interface.
+
+# Help text
+usage() {
+cat << EOF
+
+Usage: dirvish-tidy [options]
+
+OPTIONS:
+    -b <bank>   Specify dirvish bank (default: BANK defined in /etc/dirvish/master.conf)
+    -a <num>    Do not delete partial images younger than this age in days (default: 7)
+    -q          Be quiet
+    -l          Do not actually remove anything, only list broken images
+    -h          Show this help message
+EOF
+}
+
+# Print line with preceding timestamp
+echotime() { echo "$(date +'%b %d %T'):" "$1"; }
+
+# Fetch dirvish bank from /etc/dirvish/master.conf
+BANK=$( sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1; print}' )
+
+# Don't delete partials newer than this many days
+AGE=7
+
+# List only flag
+LIST=0
+
+# Quiet flag
+QUIET=0
+
+# Make sure no dirvish job is running
+x=$( pgrep -c dirvish )
+if [ "$x" -gt 0 ]
+then
+    echotime "Dirvish is currently running. Stop."
+    exit 2
+fi
+
+# Process command line options
+while getopts "b:a:qlh" OPT
+do
+    case $OPT in
+    b)
+        BANK=$OPTARG
+        ;;
+    a)
+        AGE=$OPTARG
+        ;;
+    q)
+        QUIET=1
+        ;;
+    l)
+        LIST=1
+        ;;
+    h)
+        usage
+        exit 0
+        ;;
+   \?)
+        usage
+        exit 1
+        ;;
+    esac
+done
+
+# echo "AGE   = $AGE"
+# echo "BANK  = $BANK"
+# echo "LIST  = $LIST"
+# echo "QUIET = $QUIET"
+
+# Skip options and shift index
+shift $((OPTIND-1))
+
+# Change directory to dirvish bank
+cd "$BANK" || ( echotime "Cannot change to dirvish bank $BANK"; exit 1 )
+
+# Loop over all dirvish vaults
+for dir in */
+do
+
+    # Remove trailing slash from dir
+    dir=${dir%/}
+
+    # Proceed to next vault if the history file of the current vault is missing
+    [ ! -f "$dir/dirvish/default.hist" ] && continue
+
+    # Grep all images in the current vault
+    imagelist=$( cd "$dir"; find * -maxdepth 0 -type d -mtime +$AGE -not -name dirvish 2>/dev/null )
+
+    # Loop over all images
+    for image in $imagelist
+    do
+
+        # Check record in history file
+        if [ $( grep -c "^$image" "$dir/dirvish/default.hist" ) -eq 0 ]
+        then
+
+            # Record is missing, thus image must be partial
+            if [ "$LIST" -eq 1 ]
+            then
+
+                # Print partial image to screen
+                echo "$dir/$image"
+
+            else
+
+                # Print identified image unless QUIET is flagged
+                if [ "$QUIET" -ne 1 ]
+                then
+                    echotime "Remove partial image $dir/$image ..."
+                fi
+
+                # Remove partial image
+                rm -rf "$dir/$image"
+
+            fi
+
+        fi
+
+    # End of image loop
+    done
+
+# End of vault loop
+done
