@@ -12,15 +12,15 @@ cat << EOF
 
 Usage: dirvish-volatile [options]
 
-This cron script manages dirvish vaults from non-permanent sources.  It can be invoked via cron or anacron.
+This cron script implements dirvish vaults for non-permanent sources on a daily basis.  It can be invoked via cron or anacron.
 
-Configuration is read from a configuration file.  Each section indicates an individual source.  The source can be of type host or device.  For hosts, several sources (IP addresses) may be specified.  Each source may contain several vaults.  Several values can be separated via colons (:).
+Configuration is read from a configuration file.  Each section indicates an individual source.  The source can be of type host or device.  For hosts, several sources (IP addresses) may be specified.  Each source may contain several vaults given by a comma-separated list.
 
 The script checks if a dirvish image is required for today.  If an image is already available, the script proceeds to the next vault.
 
-  -c   Configuration file (default: /etc/dirvish/dirvish-volatile.conf)
+  -c   Configuration file (default: PREFIX/etc/dirvish/dirvish-volatile.conf)
   -s   Spooling directory (default: /var/spool/dirvish)
-  -f   Check physically if dirvish image image exists
+  -f   Physically check whether dirvish image exists
   -h   Display help text
 EOF
 }
@@ -97,7 +97,7 @@ echo "--" | tee --append "$LOGFILE"
 BANK=$(sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1;print}')
 
 # Fetch image-default format form /etc/dirvish/master.conf
-FORMAT=$(sed -n 's/^image-default:\(.*\)$/\1/p' /etc/dirvish/master.conf | awk ' {$1=$1;print} ')
+FORMAT=$(sed -n 's/^image-default:\(.*\)$/\1/p' /etc/dirvish/master.conf | awk '{$1=$1; print}')
 TODAY=$(date "+$FORMAT" || exit 1)
 
 # Echo identified dirvish bank

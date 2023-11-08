@@ -54,6 +54,19 @@ Run `dirvish` on volatile branches during specific hours of the day every 20 min
 */20    9-21   *     *     *     root   dirvish-volatile >> /var/log/dirvish/volatile.log 2>&1
 ```
 
+```config
+[Client1]
+TYPE = HOST
+SOURCE = 192.168.178.20
+VAULT = someclient-root,someclient-home
+
+[Client2]
+TYPE = HOST
+SOURCE = 192.168.178.22
+VAULT = otherclient-root,otherclient-home
+```
+
+
 
 # CONTRIBUTION
 

@@ -6,7 +6,7 @@ if [ ! -x /usr/sbin/dirvish-expire  ]; then exit 0; fi
 if [ ! -s /etc/dirvish/master.conf ];  then exit 0; fi
 
 
-#
+# Help text
 usage() {
 cat << EOF
 
@@ -16,29 +16,20 @@ EOF
 }
 
 
-# Check for root privileges
+# Check root privileges
 if [ "$(id -u)" -ne 0 ]
 then
     echo "This script needs to be run with root privileges" 1>&2
     exit 1
 fi
 
-
 # Ensure only one instance is running at a time
-#instances=$(pgrep -c -f "$0")
+instances=$(pgrep -c -f "$0")
 #if (( $instances > 1 ))
 #then
-#    echo "$(basename $0) is already running (instances: $instances). Stop." 1>&2
+#    echo "$(basename $0) is already running (instances: $instances). Stop."
 #    exit 1
 #fi
-
-
-# Logfile
-LOGFILE="/var/log/dirvish-cronjob.log"
-
-# Echo line with preceding timestamp
-echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGFILE"; }
-
 
 # Locate mandatory commands
 MOUNTPATH=$(command -v mountpath)
@@ -47,14 +38,22 @@ DIRVISH_EXPIRE=$(command -v dirvish-expire)
 DIRVISH_RUNALL=$(command -v dirvish-runall)
 
 # Check commands
-if [ ! -x "${MOUNTPATH}" ]
+if [ ! -x "$MOUNTPATH" ]
 then
     echotime "Tool mountpath not found, probably not installed"
     exit 1
 fi
 
+# Logfile
+LOGFILE="/var/log/dirvish-cronjob.log"
+
+
+# Echo line with preceding timestamp
+echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGFILE"; }
+
+
 # Fetch dirvish bank from /etc/dirvish/master.conf
-BANK=$( sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1; print}' )
+BANK=$(sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1; print}')
 
 # Check dirvish bank
 if [ -z "$BANK" ]

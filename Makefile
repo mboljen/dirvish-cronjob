@@ -56,8 +56,10 @@ install:
 	mkdir -p $(DOC_DIR)
 	cp -r $(DOC_FILES) $(DOC_DIR)/
 ifneq ($(PREFIX),)
+	[ -f /etc/dirvish/master.conf ] && mv /etc/dirvish/master.conf /etc/dirvish/master.conf.bak
 	ln -sf $(PREFIX)/etc/cron.d/dirvish-volatile /etc/cron.d/dirvish-volatile
 	ln -sf $(PREFIX)/etc/cron.daily/dirvish-cronjob /etc/cron.daily/dirvish-cronjob
+	ln -sf $(PREFIX)/etc/dirvish/master.conf /etc/dirvish/master.conf
 endif
 
 uninstall:
@@ -66,6 +68,8 @@ uninstall:
 ifneq ($(PREFIX),)
 	$(RM) /etc/cron.d/dirvish-volatile
 	$(RM) /etc/cron.daily/dirvish-cronjob
+	$(RM) /etc/dirvish/master.conf
+	[ -f /etc/dirvish/master.conf.bak ] && mv /etc/dirvish/master.conf.bak /etc/dirvish/master.conf
 endif
 
 .PHONY: build sign man clean test tag release install uninstall all

@@ -1,4 +1,8 @@
 #!/bin/sh
+#
+# dirvish's cron script
+#
+# This script runs the daily dirvish cronjob.
 
-# Run daily dirvish cronjob
-[ -x dirvish-cronjob ] && dirvish-cronjob >> /var/log/dirvish-cronjob.log 2>&1
+test -x "$(which dirvish-cronjob)" || exit 0
+dirvish-cronjob
