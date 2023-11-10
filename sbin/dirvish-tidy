@@ -32,7 +32,7 @@ EOF
 echotime() { echo "$(date +'%b %d %T'):" "$1"; }
 
 # Fetch dirvish bank from /etc/dirvish/master.conf
-BANK=$( sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1; print}' )
+BANK=$(sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1; print}')
 
 # Don't delete partials newer than this many days
 AGE=7
@@ -44,10 +44,10 @@ LIST=0
 QUIET=0
 
 # Make sure no dirvish job is running
-x=$( pgrep -c dirvish )
-if [ "$x" -gt 0 ]
+instances=$(pgrep -c /usr/sbin/dirvish)
+if (( $instances > 1 ))
 then
-    echotime "Dirvish is currently running. Stop."
+    echotime "Dirvish is already running (instances: $instances). Stop."
     exit 2
 fi
 
@@ -100,14 +100,14 @@ do
     [ ! -f "$dir/dirvish/default.hist" ] && continue
 
     # Grep all images in the current vault
-    imagelist=$( cd "$dir"; find * -maxdepth 0 -type d -mtime +$AGE -not -name dirvish 2>/dev/null )
+    imagelist=$(cd "$dir"; find * -maxdepth 0 -type d -mtime +$AGE -not -name dirvish 2>/dev/null)
 
     # Loop over all images
     for image in $imagelist
     do
 
         # Check record in history file
-        if [ $( grep -c "^$image" "$dir/dirvish/default.hist" ) -eq 0 ]
+        if [ $(grep -c "^$image" "$dir/dirvish/default.hist") -eq 0 ]
         then
 
             # Record is missing, thus image must be partial

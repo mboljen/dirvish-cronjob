@@ -56,18 +56,13 @@ SPOOLDIR="/var/spool/dirvish"
 # Check flag
 CHECKFLAG=0
 
-
 # Echo line with preceding timestamp
 echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGFILE"; }
 
-
 # Check commands
-[ -x "$(command -v dirvish)" ]    || exit 1
-[ -x "$(command -v confget)" ]    || exit 1
-[ -x "$(command -v mountpoint)" ] || exit 1
-[ -x "$(command -v mountpath)" ]  || exit 1
-[ -x "$(command -v ping)" ]       || exit 1
-
+[ -x "$(command -v dirvish)" ] || exit 1
+[ -x "$(command -v confget)" ] || exit 1
+[ -x "$(command -v ping)" ]    || exit 1
 
 # Process options
 while getopts c:s:fh OPTION
@@ -89,7 +84,6 @@ do
     esac
 done
 
-
 # Start log
 echo "--" | tee --append "$LOGFILE"
 
@@ -104,39 +98,22 @@ TODAY=$(date "+$FORMAT" || exit 1)
 echotime "Dirvish bank located at $BANK"
 
 # Check mount status of dirvish bank
-mountpath -c "$BANK" >/dev/null 2>&1
-MOUNTSTAT=$?
-
-# Check mount status
-if [ "$MOUNTSTAT" -eq 0 ]
+if findmnt --mountpoint "$BANK" >/dev/null
 then
-
-    # Device already mounted
+    mountstat=0
     echotime "Dirvish device already mounted"
-
-elif [ "$MOUNTSTAT" -eq 1 ]
-then
-
-    # Device currently not mounted
-    echotime "Dirvish device not mounted"
-
 else
-
-    # Unknown error
-    echotime "Mount status of dirvish device unknown (exitcode: $MOUNTSTAT)"
-    exit 1
-
+    mountstat=1
+    echotime "Dirvish device not mounted"
 fi
 
 # Function to mount dirvish bank unless mounted
 mountnow() {
-    mountpath -c "$1" >/dev/null 2>&1
-    local stat=$?
-    if [ "$stat" -ne 0 ]
+    if ! findmnt --mountpoint "$1" >/dev/null
     then
+        mountstat=2
         echotime "Mounting dirvish bank ..."
-        mountpath "$1"
-        MOUNTSTAT=2
+        mount "$1" || exit 1
     fi
 }
 
@@ -176,11 +153,11 @@ do
     IFS="," read -r -a VAULTS <<< "$VAULT"
 
     # Check if image of today is already available
-    for THIS in "${VAULTS[@]}"
+    for this in "${VAULTS[@]}"
     do
 
         # Associate spoolfile
-        SPOOLFILE="$SPOOLDIR/$THIS"
+        SPOOLFILE="$SPOOLDIR/$this"
 
         # Perform checking according to user setting
         if [ $CHECKFLAG -eq 0 ]
@@ -191,7 +168,7 @@ do
             then
 
                 # Image is already available and up-to-date
-                echotime "Found timestamp for a valid image $TODAY for vault $THIS"
+                echotime "Found timestamp for a valid image $TODAY for vault $this"
                 continue
 
             fi
@@ -202,7 +179,7 @@ do
             mountnow "$BANK"
 
             # Set absolute path
-            DIR="$BANK/$THIS/$TODAY"
+            DIR="$BANK/$this/$TODAY"
 
             # Check for dirvish summary file
             if [ -f "$DIR/summary" ]
@@ -213,13 +190,13 @@ do
                 then
 
                     # Status successful
-                    echotime "Found valid image $TODAY for vault $THIS"
+                    echotime "Found valid image $TODAY for vault $this"
                     continue
 
                 else
 
                     # Status not successful
-                    echotime "Found incomplete image $TODAY for vault $THIS, skipped"
+                    echotime "Found incomplete image $TODAY for vault $this, skipped"
                     # rm -rf "${DIR}"
                     continue
 
@@ -228,9 +205,8 @@ do
 
         fi
 
-
         # Flag to indicate availability of source
-        ACCESS=0
+        access=0
 
         # Fetch variable SOURCE
         SOURCE=$(confget -n -f "$RCFILE" -s "$i" -L 'SOURCE')
@@ -267,7 +243,7 @@ do
                 if [ "$stat" -eq 0 ]
                 then
                     # Set flag to true
-                    ACCESS=1
+                    access=1
                     # Skip remaining hosts (IP addresses)
                     break
                 fi
@@ -277,9 +253,9 @@ do
         then
 
             # Check if device is available, i.e. mounted
-            if mountpoint -q "$SOURCE"
+            if findmnt --mountpoint "$SOURCE" >/dev/null
             then
-                ACCESS=1
+                access=1
             fi
 
         else
@@ -291,39 +267,40 @@ do
         fi
 
         # Check if host or device is available
-        if [ $ACCESS -ne 1 ]
+        if [ $access -ne 1 ]
         then
 
             # Host or device is currently not accessible
-            echotime "Skipping image $TODAY for vault $THIS, $TYPE currently unavailable"
+            echotime "Skipping image $TODAY for vault $this, $TYPE currently unavailable"
             continue
+
         fi
 
         # Show message
-        echotime "Creating image $TODAY for vault $THIS ..."
+        echotime "Creating image $TODAY for vault $this ..."
 
         # Mount dirvish bank unless already mounted
         mountnow "$BANK"
 
         # Start dirvish
-        dirvish --vault "$THIS"
+        dirvish --vault "$this"
         stat=$?
         if [ ${stat} -eq 0 ]
         then
-            echotime "Image $TODAY for vault $THIS successfully created"
+            echotime "Image $TODAY for vault $this successfully created"
             echo "$TODAY" > "$SPOOLFILE"
         else
-            echotime "Image $TODAY for vault $THIS potentially failed, dirvish exit status: $?"
+            echotime "Image $TODAY for vault $this potentially failed, dirvish exit status: $?"
         fi
 
     done
 done
 
 # Umount dirvish device if mounted before
-if [ "$MOUNTSTAT" -eq 2 ]
+if [ "$mountstat" -eq 2 ]
 then
     echotime "Unmounting dirvish bank ..."
-    mountpath -u "$BANK" >/dev/null 2>&1
+    umount "$BANK" || exit 1
 fi
 
 # Terminate successfully
