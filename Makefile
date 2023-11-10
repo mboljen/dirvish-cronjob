@@ -57,15 +57,19 @@ install:
 	cp -r $(DOC_FILES) $(DOC_DIR)/
 ifneq ($(PREFIX),)
 	[ -f /etc/dirvish/master.conf ] && mv /etc/dirvish/master.conf /etc/dirvish/master.conf.bak
-	ln -sf $(PREFIX)/etc/cron.d/dirvish-volatile /etc/cron.d/dirvish-volatile
 	ln -sf $(PREFIX)/etc/cron.daily/dirvish-cronjob /etc/cron.daily/dirvish-cronjob
+	ln -sf $(PREFIX)/etc/cron.d/dirvish-volatile /etc/cron.d/dirvish-volatile
 	ln -sf $(PREFIX)/etc/dirvish/master.conf /etc/dirvish/master.conf
+	ln -sf $(PREFIX)/etc/logrotate.d/dirvish-cronjob /etc/logrotate.d
+	ln -sf $(PREFIX)/etc/logrotate.d/dirvish-volatile /etc/logrotate.d
 endif
 
 uninstall:
 	for file in $(INSTALL_FILES); do $(RM) -f $(PREFIX)/$$file; done
 	$(RM) -r $(DOC_DIR)
 ifneq ($(PREFIX),)
+	$(RM) /etc/logrotate.d/dirvish-cronjob
+	$(RM) /etc/logrotate.d/dirvish-volatile
 	$(RM) /etc/cron.d/dirvish-volatile
 	$(RM) /etc/cron.daily/dirvish-cronjob
 	$(RM) /etc/dirvish/master.conf
