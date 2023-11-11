@@ -276,11 +276,11 @@ do
 
         fi
 
-        # Show message
-        echotime "Creating image $TODAY for vault $this ..."
-
         # Mount dirvish bank unless already mounted
         mountnow "$BANK"
+
+        # Show message
+        echotime "Creating image $TODAY for vault $this ..."
 
         # Start dirvish
         dirvish --vault "$this"
