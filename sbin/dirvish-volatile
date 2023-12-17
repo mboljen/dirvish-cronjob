@@ -27,37 +27,43 @@ EOF
 
 
 # Check root privileges
-if [ "$(id -u)" -ne 0 ]
+if [ $(id -u) -ne 0 ]
 then
     echo "This script needs to be run with root privileges" 1>&2
     exit 1
 fi
 
 # Ensure only one instance is running at a time
-instances=$(pgrep -c -f "$0")
-#if (( $instances > 1 ))
-#then
-#    echo "$(basename $0) is already running (instances: $instances). Stop."
-#    exit 1
-#fi
+instances=$(pgrep -c /usr/sbin/dirvish)
+if (( $instances > 1 ))
+then
+    echo "Dirvish is already running (instances: $instances). Stop."
+    exit 1
+fi
 
 # Resolve folder where script resides
 SCRIPTDIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
+# Get systen folders
+IFS=:
+read CONFDIR  _ <<< "$(systemd-path system-configuration)"
+read SPOOLDIR _ <<< "$(systemd-path system-state-spool)"
+read LOGDIR   _ <<< "$(systemd-path system-state-logs)"
+unset IFS
+
+# Add application subfolder
+CONFDIR+="/dirvish"
+SPOOLDIR+="/dirvish"
+LOGDIR+="/dirvish"
+
 # Default configuration file
-RCFILE=$(realpath "$SCRIPTDIR/../etc/dirvish/dirvish-volatile.conf")
-
-# Logfile
-LOGFILE="/var/log/dirvish-volatile.log"
-
-# Spool directory
-SPOOLDIR="/var/spool/dirvish"
+RCFILE="$CONFDIR/dirvish-volatile.conf"
 
 # Check flag
 CHECKFLAG=0
 
 # Echo line with preceding timestamp
-echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGFILE"; }
+echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGDIR/dirvish-volatile.log"; }
 
 # Check commands
 [ -x "$(command -v dirvish)" ] || exit 1
@@ -85,7 +91,7 @@ do
 done
 
 # Start log
-echo "--" | tee --append "$LOGFILE"
+echo "--" | tee --append "$LOGDIR/dirvish-volatile.log"
 
 # Fetch bank from /etc/dirvish/master.conf
 BANK=$(sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1;print}')

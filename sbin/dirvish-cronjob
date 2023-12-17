@@ -23,7 +23,7 @@ then
 fi
 
 # Ensure only one instance is running at a time
-instances=$(pgrep -c /usr/sbin/dirvish)
+instances=$(pgrep -f -c /usr/sbin/dirvish)
 if (( $instances > 1 ))
 then
     echo "Dirvish is already running (instances: $instances). Stop."
@@ -35,11 +35,16 @@ DIRVISH_TIDY=$(command -v dirvish-tidy)
 DIRVISH_EXPIRE=$(command -v dirvish-expire)
 DIRVISH_RUNALL=$(command -v dirvish-runall)
 
-# Logfile
-LOGFILE="/var/log/dirvish-cronjob.log"
+# Fetch location of local system folders
+IFS=:
+read LOGDIR _ <<< "$(systemd-path system-state-logs)"
+unset IFS
+
+# Add aplication subfolders
+LOGDIR+="/dirvish"
 
 # Echo line with preceding timestamp
-echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGFILE"; }
+echotime() { echo "$(date +'%b %d %T'):" "$1" | tee --append "$LOGDIR/dirvish-cronjob.log"; }
 
 # Fetch dirvish bank from /etc/dirvish/master.conf
 BANK=$(sed -n '/^bank:/{n;p;}' /etc/dirvish/master.conf | awk '{$1=$1; print}')

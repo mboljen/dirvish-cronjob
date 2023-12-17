@@ -1,4 +1,4 @@
-/var/log/dirvish-volatile.log
+/var/log/dirvish/dirvish-volatile.log
 {
     daily
     missingok

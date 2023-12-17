@@ -1,4 +1,4 @@
-/var/log/dirvish-cronjob.log
+/var/log/dirvish/dirvish-cronjob.log
 {
     daily
     missingok

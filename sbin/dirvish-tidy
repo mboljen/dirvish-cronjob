@@ -44,7 +44,7 @@ LIST=0
 QUIET=0
 
 # Make sure no dirvish job is running
-instances=$(pgrep -c /usr/sbin/dirvish)
+instances=$(pgrep -f -c /usr/sbin/dirvish)
 if (( $instances > 1 ))
 then
     echotime "Dirvish is already running (instances: $instances). Stop."

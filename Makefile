@@ -1,7 +1,7 @@
 NAME=dirvish-cronjob
 VERSION=0.0.1
 
-DIRS=etc sbin share
+DIRS=sbin share
 INSTALL_DIRS=`find $(DIRS) -type d 2>/dev/null`
 INSTALL_FILES=`find $(DIRS) -type f 2>/dev/null`
 DOC_FILES=$(wildcard *.md *.txt)
@@ -55,25 +55,28 @@ install:
 	for file in $(INSTALL_FILES); do cp $$file $(PREFIX)/$$file; done
 	mkdir -p $(DOC_DIR)
 	cp -r $(DOC_FILES) $(DOC_DIR)/
-ifneq ($(PREFIX),)
-	[ -f /etc/dirvish/master.conf ] && mv /etc/dirvish/master.conf /etc/dirvish/master.conf.bak
-	ln -sf $(PREFIX)/etc/cron.daily/dirvish-cronjob /etc/cron.daily/dirvish-cronjob
-	ln -sf $(PREFIX)/etc/cron.d/dirvish-volatile /etc/cron.d/dirvish-volatile
-	ln -sf $(PREFIX)/etc/dirvish/master.conf /etc/dirvish/master.conf
-	ln -sf $(PREFIX)/etc/logrotate.d/dirvish-cronjob /etc/logrotate.d
-	ln -sf $(PREFIX)/etc/logrotate.d/dirvish-volatile /etc/logrotate.d
+ifneq ($(wildcard /etc/dirvish/master.conf),)
+	mv -f /etc/dirvish/master.conf /etc/dirvish/master.conf.bak
 endif
+	cp -u -t /etc/dirvish etc/dirvish/master.conf
+	cp -u -t /etc/cron.d etc/cron.d/dirvish-volatile
+	cp -u -t /etc/cron.daily etc/cron.daily/dirvish-cronjob
+	cp -u -t /etc/logrotate.d etc/logrotate.d/dirvish-cronjob
+	cp -u -t /etc/logrotate.d etc/logrotate.d/dirvish-volatile
 
 uninstall:
 	for file in $(INSTALL_FILES); do $(RM) -f $(PREFIX)/$$file; done
 	$(RM) -r $(DOC_DIR)
-ifneq ($(PREFIX),)
-	$(RM) /etc/logrotate.d/dirvish-cronjob
-	$(RM) /etc/logrotate.d/dirvish-volatile
 	$(RM) /etc/cron.d/dirvish-volatile
 	$(RM) /etc/cron.daily/dirvish-cronjob
+	$(RM) /etc/logrotate.d/dirvish-cronjob
+	$(RM) /etc/logrotate.d/dirvish-volatile
 	$(RM) /etc/dirvish/master.conf
-	[ -f /etc/dirvish/master.conf.bak ] && mv /etc/dirvish/master.conf.bak /etc/dirvish/master.conf
+ifneq ($(wildcard /etc/dirvish/master.conf.bak),)
+	mv -f /etc/dirvish/master.conf.bak /etc/dirvish/master.conf
 endif
+
+purge: uninstall
+	$(RM) -r /var/log/$(NAME)
 
 .PHONY: build sign man clean test tag release install uninstall all
