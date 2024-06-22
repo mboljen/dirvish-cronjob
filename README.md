@@ -1,16 +1,34 @@
 # dirvish-cronjob
 
-Dirvish cronjob for non-permanent available dirvish banks and branches
+Dirvish cronjob for non-permanently available dirvish banks and branches
 
 
 ## Description
 
-This cronjob implements daily backups for non-permanently mounted dirvish banks and branches.
+This project implements daily backups for non-permanently mounted dirvish banks and branches.
 
 
 ## Synopsis
 
-None.
+Run `PREFIX/sbin/dirvish-cronjob` on permanently available branches once a day, invoked by `/etc/cron.daily/dirvish-cronjob`.  Output is directed to the logfile `/var/log/dirvish-cronjob.log`.
+
+```sh
+#!/bin/sh
+
+# Run daily dirvish cronjob
+[ -x dirvish-cronjob ] && dirvish-cronjob >> /var/log/dirvish-cronjob.log 2>&1
+```
+
+Run `PREFIX/sbin/dirvish-volatile` on volatile branches during specific hours of the day.  Backups will only be created if the dirvish branches are available, and a completed daily backup is not yet available.  Output is directory to the logfile `/var/log/dirvish-volatile.log`.
+
+```config
+# crontab fragment for dirvish-volatile
+
+# run every 20 minutes between 9-21 hours daily
+#
+# min   hour   dom   mon   dow   user   command
+*/20    9-21   *     *     *     root   dirvish-volatile >> /var/log/dirvish/volatile.log 2>&1
+```
 
 
 ## Installation
@@ -34,40 +52,24 @@ The default `PREFIX` is set to `/usr/local`.  In order to successfully complete 
 
 ## Configuration
 
-Run `dirvish` on permanently available branches once a day, invoked by `PREFIX/etc/cron.daily/dirvish-cronjob`:
-
-```sh
-#!/bin/sh
-
-# Run daily dirvish cronjob
-[ -x dirvish-cronjob ] && dirvish-cronjob >> /var/log/dirvish-cronjob.log 2>&1
-```
-
-Run `dirvish` on volatile branches during specific hours of the day every 20 minutes until completed successfully:
+Specify remote clients in configuration file `/etc/dirvish/dirvish-volatile.conf`:
 
 ```config
-# crontab fragment for dirvish-volatile
-
-# run every 20 minutes between 9-21 hours daily
-#
-# min   hour   dom   mon   dow   user   command
-*/20    9-21   *     *     *     root   dirvish-volatile >> /var/log/dirvish/volatile.log 2>&1
-```
-
-Specify remote clients in configuration file `PREFIX/etc/cron.d/dirvish-volatile`:
-
-
-```config
-[Client1]
+[CLIENT1]
 TYPE = HOST
 SOURCE = 192.168.178.20
 VAULT = someclient-root,someclient-home
 
-[Client2]
+[CLIENT2]
 TYPE = HOST
 SOURCE = 192.168.178.22
 VAULT = otherclient-root,otherclient-home
 ```
+
++ For each client or device, specify a separate section.  Specify a unique section name, e.g. the name of the client or the device.
++ The parameter `TYPE` holds either the `HOST` or `DEVICE`.
++ The parameter `SOURCE` holds a comma-separated list of IP addresses (required for `TYPE=HOST` only)
++ The parameter `VAULT` holds a comma-separated list of dirvish vaults available for this client or device.
 
 
 ## Contributing
