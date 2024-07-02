@@ -3,11 +3,6 @@
 Dirvish cronjob for non-permanently available dirvish banks and branches
 
 
-## Description
-
-This project implements daily backups for non-permanently mounted dirvish banks and branches.
-
-
 ## Synopsis
 
 Run `PREFIX/sbin/dirvish-cronjob` on permanently available branches once a day, invoked by `/etc/cron.daily/dirvish-cronjob`.  Output is directed to the logfile `/var/log/dirvish-cronjob.log`.
@@ -29,6 +24,16 @@ Run `PREFIX/sbin/dirvish-volatile` on volatile branches during specific hours of
 # min   hour   dom   mon   dow   user   command
 */20    9-21   *     *     *     root   dirvish-volatile >> /var/log/dirvish/volatile.log 2>&1
 ```
+
+
+## Description
+
+This project implements daily backups for non-permanently mounted dirvish banks and branches.
+
+
+## Requirements
+
++ [dirvish](https://dirvish.org)
 
 
 ## Installation
@@ -77,6 +82,11 @@ VAULT = otherclient-root,otherclient-home
 Pull requests are welcome.  For major changes, please open an issue first to discuss what you would like to change.
 
 Please make sure to update tests as appropriate.
+
+
+## See also
+
++ [Remote backup with dirvish, rsync and ssh](http://apt-get.dk/howto/backup)
 
 
 ## License

@@ -32,7 +32,9 @@ man:
 	mkdir -p $(MAN_DIR)
 
 $(MAN): README.md man
-	pandoc -s -M "title=$(NAME)($(MAN_SECTION))" -M "date=$(shell date "+%a %F %R %Z")" -t man $< | gzip -9 > $(MAN)
+	pandoc -s -M "title=$(shell echo $(NAME) | tr a-z A-Z)($(MAN_SECTION))" \
+	          -M "date=$(shell date "+%B %Y")" \
+	          -f markdown -t man $< | gzip -9 > $@
 
 sign: $(SIG)
 
@@ -42,7 +44,11 @@ $(SIG): $(PKG)
 clean:
 	$(RM) $(MAN) $(PKG) $(SIG)
 
+veryclean: clean
+	$(RM) -r -d $(MAN_DIR)
+
 test:
+	$(info Target `$@` not implemented yet)
 
 tag:
 	git tag v$(VERSION)
@@ -79,4 +85,4 @@ endif
 purge: uninstall
 	$(RM) -r /var/log/$(NAME)
 
-.PHONY: build sign man clean test tag release install uninstall all
+.PHONY: build sign man clean veryclean test tag release install uninstall all
